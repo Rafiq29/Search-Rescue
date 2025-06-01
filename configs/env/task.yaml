@@ -1,0 +1,6 @@
+# configs/env/task.yaml
+map_size: 10
+num_agents: 5
+num_victims: 3
+max_steps: 100
+obstacle_density: 0.2

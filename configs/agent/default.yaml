@@ -1,0 +1,4 @@
+# configs/agent/default.yaml
+agent_type: "ppo"  # Example agent type, adjust based on your implementation
+learning_rate: 0.001
+gamma: 0.99
