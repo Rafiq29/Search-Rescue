@@ -5,6 +5,7 @@ from torchrl.modules import ProbabilisticActor, ValueOperator
 from tensordict.nn import TensorDictModule
 from torch.optim import Adam
 
+
 class PPOAgent:
     def __init__(self, env, learning_rate=0.001, gamma=0.99, clip_eps=0.2):
         self.env = env
@@ -48,57 +49,24 @@ class PPOAgent:
         self.actor_optimizer = Adam(self.policy.parameters(), lr=learning_rate)
         self.critic_optimizer = Adam(self.critic.parameters(), lr=learning_rate)
 
-    def policy(self, obs):
+    def get_action(self, obs):
+        """Get action from policy - this is what the collector will call"""
         if not isinstance(obs, TensorDict):
-            # Wrap the observation tensor into a TensorDict with the correct batch size
             obs = TensorDict({"observation": obs}, batch_size=[self.env.num_agents])
+
         # Run the policy and get the action
-        policy_output = self.policy(obs.clone())  # Clone to avoid modifying the input
-        action = policy_output["action"]
-        expected_batch_size = (self.env.num_agents,)
-        if action.shape != expected_batch_size:
-            raise ValueError(f"Action shape {action.shape} does not match expected batch size {expected_batch_size}")
-        return action
+        policy_output = self.policy(obs.clone())
+        return policy_output["action"]
 
     def value(self, obs):
         if not isinstance(obs, TensorDict):
             obs = TensorDict({"observation": obs}, batch_size=[self.env.num_agents])
         return self.critic(obs)
 
-    def update(self, batch):
-        obs = batch["observation"]
-        actions = batch["action"]
-        rewards = batch["reward"]
-        next_obs = batch.get("next_observation", obs)
-        dones = batch["done"]
+    def __call__(self, tensordict):
+        """Make the agent callable for the collector"""
+        return self.policy(tensordict)
 
-        # Compute returns and advantages
-        values = self.value(obs).squeeze(-1)
-        next_values = self.value(next_obs).squeeze(-1)
-        returns = rewards + self.gamma * next_values * (1 - dones)
-        advantages = returns - values
-
-        # Actor loss
-        log_probs = self.policy.log_prob(obs, actions)
-        old_log_probs = log_probs.detach()
-        ratio = torch.exp(log_probs - old_log_probs)
-        surr1 = ratio * advantages
-        surr2 = torch.clamp(ratio, 1 - self.clip_eps, 1 + self.clip_eps) * advantages
-        actor_loss = -torch.min(surr1, surr2).mean()
-
-        # Critic loss
-        critic_loss = nn.MSELoss()(values, returns)
-
-        # Optimize
-        self.actor_optimizer.zero_grad()
-        actor_loss.backward()
-        self.actor_optimizer.step()
-
-        self.critic_optimizer.zero_grad()
-        critic_loss.backward()
-        self.critic_optimizer.step()
-
-        return actor_loss + 0.5 * critic_loss
 
 def create_policy_and_critic(num_agents, obs_dim, action_dim, action_spec):
     # Define custom networks
@@ -120,8 +88,9 @@ def create_policy_and_critic(num_agents, obs_dim, action_dim, action_spec):
     class CriticNetwork(nn.Module):
         def __init__(self):
             super().__init__()
+            # Use individual agent observations for simplicity
             self.net = nn.Sequential(
-                nn.Linear(obs_dim * num_agents, 128),
+                nn.Linear(obs_dim, 128),
                 nn.ReLU(),
                 nn.Linear(128, 128),
                 nn.ReLU(),
@@ -130,9 +99,14 @@ def create_policy_and_critic(num_agents, obs_dim, action_dim, action_spec):
 
         def forward(self, x):
             # x shape: (batch_size, obs_dim) = (5, 8)
-            # Flatten for centralized critic
-            x = x.view(-1, obs_dim * num_agents)  # Shape: (1, 40)
-            return self.net(x)  # Output shape: (1, 1)
+            # Process each agent's observation individually
+            batch_size = x.shape[0]
+            values = []
+            for i in range(batch_size):
+                agent_obs = x[i:i + 1]  # Keep batch dimension
+                value = self.net(agent_obs)
+                values.append(value)
+            return torch.cat(values, dim=0)  # Shape: (5, 1)
 
     # Create policy module (CTDE: decentralized execution with local observations)
     policy_net = PolicyNetwork()
@@ -141,16 +115,18 @@ def create_policy_and_critic(num_agents, obs_dim, action_dim, action_spec):
         in_keys=["observation"],
         out_keys=["logits"]
     )
+
+    # Create the probabilistic actor
     policy = ProbabilisticActor(
         module=policy_module,
         spec=action_spec,
-        in_keys=["logits"],  # Only logits are needed for Categorical distribution
+        in_keys=["logits"],
         out_keys=["action"],
         distribution_class=torch.distributions.Categorical,
-        return_log_prob=True  # Ensure log_prob is available
+        return_log_prob=True
     )
 
-    # Create critic module (CTDE: centralized training with global info)
+    # Create critic module
     critic_net = CriticNetwork()
     critic = ValueOperator(
         module=critic_net,

@@ -1,0 +1,23 @@
+agent:
+  agent_type: ppo
+  learning_rate: 0.001
+  gamma: 0.99
+algo:
+  algo:
+    frames_per_batch: 2048
+    total_frames: 999424
+    ppo_epochs: 10
+    clip_epsilon: 0.2
+    entropy_coef: 0.01
+    lr: 0.0003
+env:
+  map_size: 10
+  num_agents: 5
+  num_victims: 3
+  max_steps: 100
+  obstacle_density: 0.2
+experiment:
+  experiment:
+    seed: 42
+    log_dir: logs/
+    output_dir: outputs/
