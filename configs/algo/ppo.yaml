@@ -1,7 +1,7 @@
-algo:
-  frames_per_batch: 2048
-  total_frames: 999424
-  ppo_epochs: 10
-  clip_epsilon: 0.2
-  entropy_coef: 0.01
-  lr: 3e-4
+# configs/algo/ppo.yaml
+frames_per_batch: 2048
+total_frames: 999424
+ppo_epochs: 10
+clip_epsilon: 0.2
+entropy_coef: 0.01
+lr: 3e-4

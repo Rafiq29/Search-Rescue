@@ -1,0 +1,12 @@
+# configs/config.yaml - Main configuration file
+defaults:
+  - agent: default
+  - algo: ppo
+  - env: task
+  - experiment: exp
+  - _self_
+
+# Hydra configuration
+hydra:
+  run:
+    dir: outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}

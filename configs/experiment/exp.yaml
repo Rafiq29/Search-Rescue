@@ -1,4 +1,4 @@
-experiment:
-  seed: 42
-  log_dir: logs/
-  output_dir: outputs/
+# configs/experiment/exp.yaml
+seed: 42
+log_dir: logs/
+output_dir: outputs/

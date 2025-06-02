@@ -1,6 +1,0 @@
-# configs/base.yaml
-defaults:
-  - agent: default
-  - algo: ppo
-  - env: task
-  - experiment: exp
